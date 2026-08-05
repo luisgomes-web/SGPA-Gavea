@@ -1,11 +1,15 @@
 import { Bell, ChevronDown, Search } from 'lucide-react'
 
-export function Header() {
+type HeaderProps = {
+  title: string
+}
+
+export function Header({ title }: HeaderProps) {
   return (
     <header className="topbar">
       <div>
         <p className="eyebrow">GÁVEA GROUP • PROJETO P-35</p>
-        <h1>Dashboard Executivo</h1>
+        <h1>{title}</h1>
       </div>
 
       <div className="topbar-actions">
