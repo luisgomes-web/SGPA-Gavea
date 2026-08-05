@@ -5,6 +5,7 @@ import { ActionPlan } from './pages/ActionPlan'
 import { Dashboard } from './pages/Dashboard'
 import { Evidences } from './pages/Evidences'
 import './App.css'
+import './pages/Evidences.css'
 
 function App() {
   const [activePage, setActivePage] = useState('Dashboard')
