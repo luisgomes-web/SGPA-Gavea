@@ -21,7 +21,12 @@ const items = [
   { label: 'Configurações', icon: Settings },
 ]
 
-export function Sidebar() {
+type SidebarProps = {
+  activePage: string
+  onNavigate: (page: string) => void
+}
+
+export function Sidebar({ activePage, onNavigate }: SidebarProps) {
   return (
     <aside className="sidebar">
       <div className="brand">
@@ -33,8 +38,13 @@ export function Sidebar() {
       </div>
 
       <nav className="sidebar-nav" aria-label="Navegação principal">
-        {items.map(({ label, icon: Icon }, index) => (
-          <button className={index === 0 ? 'nav-item active' : 'nav-item'} key={label} type="button">
+        {items.map(({ label, icon: Icon }) => (
+          <button
+            className={activePage === label ? 'nav-item active' : 'nav-item'}
+            key={label}
+            type="button"
+            onClick={() => onNavigate(label)}
+          >
             <Icon size={19} strokeWidth={1.8} />
             <span>{label}</span>
           </button>
