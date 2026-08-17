@@ -122,12 +122,14 @@ export function Evidences() {
     }
   }
 
+  function viewEvidence(item: EvidenceItem) {
+    window.open(item.url, '_blank', 'noopener,noreferrer')
+  }
+
   function downloadEvidence(item: EvidenceItem) {
     const link = document.createElement('a')
-    link.href = item.url
+    link.href = item.downloadUrl
     link.download = item.name
-    link.target = '_blank'
-    link.rel = 'noreferrer'
     document.body.appendChild(link)
     link.click()
     link.remove()
@@ -187,8 +189,8 @@ export function Evidences() {
                     <small>Enviado por {item.uploadedBy}</small>
                   </div>
                   <div className="evidence-actions">
-                    <button type="button" title="Ver detalhes" onClick={() => setSelected(item)}><Eye size={16} /></button>
-                    <button type="button" title="Baixar" onClick={() => downloadEvidence(item)}><Download size={16} /></button>
+                    <button type="button" title="Visualizar arquivo" onClick={() => viewEvidence(item)}><Eye size={16} /></button>
+                    <button type="button" title="Baixar arquivo" onClick={() => downloadEvidence(item)}><Download size={16} /></button>
                     <button type="button" title="Excluir" onClick={() => void removeEvidence(item)}><Trash2 size={16} /></button>
                   </div>
                 </article>
