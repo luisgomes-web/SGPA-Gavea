@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar'
 import { ActionPlan } from './pages/ActionPlan'
 import { Dashboard } from './pages/Dashboard'
 import { Evidences } from './pages/Evidences'
+import { Indicators } from './pages/Indicators'
 import './App.css'
 import './pages/Evidences.css'
 
@@ -13,6 +14,7 @@ function App() {
   function renderPage() {
     if (activePage === 'Plano de Ação') return <ActionPlan />
     if (activePage === 'Evidências') return <Evidences />
+    if (activePage === 'Indicadores') return <Indicators />
     return <Dashboard />
   }
 
