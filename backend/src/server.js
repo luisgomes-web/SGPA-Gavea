@@ -1,7 +1,7 @@
 import express from 'express'
 import cors from 'cors'
 import multer from 'multer'
-import { mkdirSync, unlinkSync } from 'node:fs'
+import { mkdirSync, unlinkSync, existsSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import { db, initializeDatabase } from './db.js'
 
@@ -130,6 +130,19 @@ app.get('/api/evidences', (req, res) => {
     ORDER BY e.id DESC
   `).all(projectCode)
   res.json(rows.map((row) => ({ ...row, url: `/uploads/${row.storage_path}` })))
+})
+
+app.get('/api/evidences/:id/download', (req, res) => {
+  const id = Number(req.params.id)
+  const evidence = db.prepare('SELECT * FROM evidences WHERE id = ?').get(id)
+  if (!evidence) return res.status(404).json({ error: 'Evidência não encontrada.' })
+
+  const filePath = join(uploadsDir, evidence.storage_path || '')
+  if (!evidence.storage_path || !existsSync(filePath)) {
+    return res.status(404).json({ error: 'Arquivo físico não encontrado.' })
+  }
+
+  res.download(filePath, evidence.file_name)
 })
 
 app.post('/api/evidences', upload.array('files', 10), (req, res) => {
