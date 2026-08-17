@@ -11,6 +11,7 @@ export type EvidenceItem = {
   uploadedBy: string
   note: string
   url: string
+  downloadUrl: string
 }
 
 type ApiEvidence = {
@@ -38,6 +39,7 @@ function toUiEvidence(row: ApiEvidence): EvidenceItem {
     uploadedBy: row.uploaded_by || 'Sistema',
     note: row.notes || '',
     url: `${API_URL}${row.url}`,
+    downloadUrl: `${API_URL}/api/evidences/${row.id}/download`,
   }
 }
 
