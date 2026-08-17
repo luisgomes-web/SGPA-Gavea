@@ -1,14 +1,37 @@
 import express from 'express'
 import cors from 'cors'
+import multer from 'multer'
+import { mkdirSync, unlinkSync } from 'node:fs'
+import { extname, join } from 'node:path'
 import { db, initializeDatabase } from './db.js'
 
 initializeDatabase()
 
 const app = express()
 const port = Number(process.env.PORT || 3001)
+const uploadsDir = join(process.cwd(), 'uploads')
+mkdirSync(uploadsDir, { recursive: true })
+
+const storage = multer.diskStorage({
+  destination: (_req, _file, callback) => callback(null, uploadsDir),
+  filename: (_req, file, callback) => {
+    const extension = extname(file.originalname)
+    const base = file.originalname
+      .slice(0, Math.max(1, file.originalname.length - extension.length))
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-zA-Z0-9_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 80) || 'arquivo'
+    callback(null, `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${base}${extension.toLowerCase()}`)
+  },
+})
+
+const upload = multer({ storage, limits: { fileSize: 25 * 1024 * 1024, files: 10 } })
 
 app.use(cors({ origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:5176'] }))
 app.use(express.json({ limit: '2mb' }))
+app.use('/uploads', express.static(uploadsDir))
 
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'SGPA API', database: 'SQLite' })
@@ -96,6 +119,70 @@ app.delete('/api/actions/:id', (req, res) => {
   res.status(204).end()
 })
 
+app.get('/api/evidences', (req, res) => {
+  const projectCode = String(req.query.project || 'P35')
+  const rows = db.prepare(`
+    SELECT e.*, a.code AS action_code, a.title AS action_title
+    FROM evidences e
+    JOIN action_items a ON a.id = e.action_item_id
+    JOIN projects p ON p.id = a.project_id
+    WHERE p.code = ?
+    ORDER BY e.id DESC
+  `).all(projectCode)
+  res.json(rows.map((row) => ({ ...row, url: `/uploads/${row.storage_path}` })))
+})
+
+app.post('/api/evidences', upload.array('files', 10), (req, res) => {
+  const actionCode = String(req.body.actionCode || '')
+  const projectCode = String(req.body.projectCode || 'P35')
+  const action = db.prepare(`
+    SELECT a.id FROM action_items a
+    JOIN projects p ON p.id = a.project_id
+    WHERE a.code = ? AND p.code = ?
+  `).get(actionCode, projectCode)
+
+  if (!action) {
+    for (const file of req.files || []) {
+      try { unlinkSync(file.path) } catch {}
+    }
+    return res.status(400).json({ error: 'Ação vinculada não encontrada.' })
+  }
+  if (!req.files?.length) return res.status(400).json({ error: 'Selecione ao menos um arquivo.' })
+
+  const insert = db.prepare(`
+    INSERT INTO evidences (action_item_id, file_name, file_type, file_size, storage_path, notes, uploaded_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
+  const select = db.prepare(`
+    SELECT e.*, a.code AS action_code, a.title AS action_title
+    FROM evidences e JOIN action_items a ON a.id = e.action_item_id WHERE e.id = ?
+  `)
+
+  const created = db.transaction(() => req.files.map((file) => {
+    const result = insert.run(action.id, file.originalname, file.mimetype, file.size, file.filename, req.body.notes || '', req.body.uploadedBy || 'Sistema')
+    const row = select.get(result.lastInsertRowid)
+    db.prepare('INSERT INTO audit_log (entity_type, entity_id, action, actor, payload) VALUES (?, ?, ?, ?, ?)')
+      .run('evidence', row.id, 'CREATE', req.body.uploadedBy || 'Sistema', JSON.stringify(row))
+    return { ...row, url: `/uploads/${row.storage_path}` }
+  }))()
+
+  res.status(201).json(created)
+})
+
+app.delete('/api/evidences/:id', (req, res) => {
+  const id = Number(req.params.id)
+  const current = db.prepare('SELECT * FROM evidences WHERE id = ?').get(id)
+  if (!current) return res.status(404).json({ error: 'Evidência não encontrada.' })
+
+  db.prepare('DELETE FROM evidences WHERE id = ?').run(id)
+  if (current.storage_path) {
+    try { unlinkSync(join(uploadsDir, current.storage_path)) } catch {}
+  }
+  db.prepare('INSERT INTO audit_log (entity_type, entity_id, action, actor, payload) VALUES (?, ?, ?, ?, ?)')
+    .run('evidence', id, 'DELETE', req.body?.actor || 'Sistema', JSON.stringify(current))
+  res.status(204).end()
+})
+
 app.get('/api/metrics', (req, res) => {
   const projectCode = String(req.query.project || 'P35')
   const metrics = db.prepare(`
@@ -110,6 +197,14 @@ app.get('/api/metrics', (req, res) => {
     WHERE p.code = ?
   `).get(projectCode)
   res.json(metrics)
+})
+
+app.use((error, _req, res, _next) => {
+  if (error instanceof multer.MulterError) {
+    return res.status(400).json({ error: error.code === 'LIMIT_FILE_SIZE' ? 'Arquivo acima do limite de 25 MB.' : error.message })
+  }
+  console.error(error)
+  res.status(500).json({ error: 'Erro interno do servidor.' })
 })
 
 app.listen(port, () => {
